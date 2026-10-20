@@ -1,6 +1,38 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getMockRecommendation } from '@/services/mockService';
+import { getRealWeather, RealWeatherData } from '@/services/weatherService';
+
+function generateRecommendation(weather: RealWeatherData): string {
+  const parts: string[] = [];
+
+  if (weather.temperature < 0) {
+    parts.push('Надевайте тёплый пуховик, шапку, шарф и перчатки.');
+  } else if (weather.temperature < 10) {
+    parts.push('Подойдёт осеннее пальто или тёплая куртка со свитером.');
+  } else if (weather.temperature < 20) {
+    parts.push('Отличный выбор — лёгкая куртка, худи или ветровка.');
+  } else {
+    parts.push('Достаточно футболки, лёгкой рубашки или платья.');
+  }
+
+  if (
+    weather.condition.toLowerCase().includes('дождь') ||
+    weather.condition.toLowerCase().includes('морось') ||
+    weather.condition.toLowerCase().includes('ливень')
+  ) {
+    parts.push('Возьмите с собой зонт и водонепроницаемую обувь.');
+  }
+
+  if (weather.windSpeed > 20) {
+    parts.push('Сильный ветер — стоит выбрать ветрозащитную одежду.');
+  }
+
+  if (weather.uvIndex >= 6) {
+    parts.push('Высокий УФ-индекс: пригодится солнцезащитный крем и очки.');
+  }
+
+  return parts.join(' ');
+}
 
 export async function GET() {
   try {
@@ -24,7 +56,7 @@ export async function GET() {
     }));
 
     return NextResponse.json(formattedHistory);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Ошибка загрузки истории из базы данных' },
       { status: 500 }
@@ -54,18 +86,19 @@ export async function POST(request: Request) {
   }
 
   try {
-    const mock = getMockRecommendation(city);
+    const weather = await getRealWeather(city);
+    const recommendationText = generateRecommendation(weather);
 
     const created = await prisma.recommendation.create({
       data: {
-        city: mock.city,
-        temperature: mock.weather.temperature,
-        feelsLike: mock.weather.feelsLike,
-        condition: mock.weather.condition,
-        windSpeed: mock.weather.windSpeed,
-        uvIndex: mock.weather.uvIndex,
-        humidity: mock.weather.humidity,
-        recommendationText: mock.recommendationText,
+        city: weather.city,
+        temperature: weather.temperature,
+        feelsLike: weather.feelsLike,
+        condition: weather.condition,
+        windSpeed: weather.windSpeed,
+        uvIndex: weather.uvIndex,
+        humidity: weather.humidity,
+        recommendationText,
       },
     });
 
@@ -85,10 +118,9 @@ export async function POST(request: Request) {
     };
 
     return NextResponse.json(responsePayload, { status: 201 });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Ошибка сохранения в базу данных' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Ошибка получения погоды';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
