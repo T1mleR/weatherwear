@@ -1,0 +1,153 @@
+openapi: 3.0.3
+info:
+  title: WeatherWear AI API
+  description: In-memory API рекомендаций по одежде на основе погоды.
+  version: 0.2.0
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Recommendations
+    description: Генерация и история советов стилиста
+
+paths:
+  /api/recommendations:
+    get:
+      tags: [Recommendations]
+      summary: Получить историю рекомендаций
+      description: Возвращает все сохранённые рекомендации из in-memory хранилища. После перезапуска сервера список пустой.
+      operationId: listRecommendations
+      responses:
+        "200":
+          description: Список рекомендаций, новые сверху
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recommendation"
+              example:
+                - id: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                  city: "Алматы"
+                  createdAt: "2026-10-20T07:30:00.000Z"
+                  weather:
+                    temperature: 18
+                    feelsLike: 16
+                    condition: "Переменная облачность"
+                    windSpeed: 4
+                    uvIndex: 6
+                    humidity: 42
+                  recommendationText: "Совет стилиста для города Алматы..."
+
+    post:
+      tags: [Recommendations]
+      summary: Создать рекомендацию по городу
+      description: Принимает город, генерирует mock-погоду и совет по одежде, сохраняет результат в память и возвращает созданный объект.
+      operationId: createRecommendation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecommendationRequest"
+            example:
+              city: "Алматы"
+      responses:
+        "201":
+          description: Рекомендация создана и сохранена
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recommendation"
+        "400":
+          description: Невалидный запрос — пустой город или некорректный JSON
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingCity:
+                  value:
+                    error: "City is required"
+                invalidJson:
+                  value:
+                    error: "Invalid JSON"
+
+components:
+  schemas:
+    CreateRecommendationRequest:
+      type: object
+      required: [city]
+      properties:
+        city:
+          type: string
+          minLength: 1
+          description: Название города
+          example: "Москва"
+
+    Weather:
+      type: object
+      required:
+        - temperature
+        - feelsLike
+        - condition
+        - windSpeed
+        - uvIndex
+        - humidity
+      properties:
+        temperature:
+          type: number
+          description: Температура в °C
+          example: 18
+        feelsLike:
+          type: number
+          description: Ощущаемая температура в °C
+          example: 16
+        condition:
+          type: string
+          example: "Переменная облачность"
+        windSpeed:
+          type: number
+          description: Скорость ветра, м/с
+          example: 4
+        uvIndex:
+          type: number
+          description: УФ-индекс
+          example: 6
+        humidity:
+          type: number
+          description: Влажность, %
+          example: 42
+
+    Recommendation:
+      type: object
+      required:
+        - id
+        - city
+        - createdAt
+        - weather
+        - recommendationText
+      properties:
+        id:
+          type: string
+          format: uuid
+        city:
+          type: string
+          example: "Алматы"
+        createdAt:
+          type: string
+          format: date-time
+        weather:
+          $ref: "#/components/schemas/Weather"
+        recommendationText:
+          type: string
+          description: Подробный текст совета по слоям, УФ-индексу, обуви и аксессуарам
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: "City is required"
