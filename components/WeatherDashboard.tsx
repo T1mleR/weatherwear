@@ -12,15 +12,28 @@ import {
   Thermometer,
   Umbrella,
   Wind,
+  AlertCircle,
 } from "lucide-react";
-import type { MockRecommendation } from "@/services/mockService";
 
-type StoredRecommendation = MockRecommendation & {
+interface WeatherData {
+  temperature: number;
+  feelsLike: number;
+  condition: string;
+  windSpeed: number;
+  uvIndex: number;
+  humidity: number;
+}
+
+interface StoredRecommendation {
   id: string;
+  city: string;
   createdAt: string;
-};
+  weather: WeatherData;
+  recommendationText: string;
+}
 
 function formatAdvice(text: string) {
+  if (!text) return null;
   const blocks = text.split("\n");
 
   return blocks.map((line, index) => {
@@ -32,7 +45,7 @@ function formatAdvice(text: string) {
       return (
         <p
           key={line}
-          className="text-lg font-semibold tracking-tight text-slate-900"
+          className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg"
         >
           {line}
         </p>
@@ -43,12 +56,14 @@ function formatAdvice(text: string) {
       line === "Слои одежды" ||
       line.startsWith("УФ-индекс") ||
       line === "Обувь" ||
-      line === "Аксессуары"
+      line === "Аксессуары" ||
+      line.toLowerCase().startsWith("одежда") ||
+      line.toLowerCase().startsWith("совет")
     ) {
       return (
         <p
           key={`${line}-${index}`}
-          className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700"
+          className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-sky-700"
         >
           {line}
         </p>
@@ -64,11 +79,11 @@ function formatAdvice(text: string) {
       );
     }
 
-    if (line.startsWith("Короткий вывод:")) {
+    if (line.startsWith("Короткий вывод:") || line.toLowerCase().startsWith("вывод:")) {
       return (
         <p
           key={`${line}-${index}`}
-          className="rounded-2xl bg-sky-50 px-4 py-3 text-sm leading-6 text-slate-700"
+          className="rounded-2xl bg-sky-50 px-4 py-3 text-sm leading-6 text-slate-700 font-medium border border-sky-100"
         >
           {line}
         </p>
@@ -85,11 +100,9 @@ function formatAdvice(text: string) {
 
 async function fetchHistory(): Promise<StoredRecommendation[]> {
   const response = await fetch("/api/recommendations");
-
   if (!response.ok) {
     throw new Error("Не удалось загрузить историю поиска.");
   }
-
   return (await response.json()) as StoredRecommendation[];
 }
 
@@ -104,10 +117,9 @@ function formatTime(iso: string) {
 
 export default function WeatherDashboard() {
   const [city, setCity] = useState("Алматы");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [recommendation, setRecommendation] =
-    useState<StoredRecommendation | null>(null);
+  const [recommendation, setRecommendation] = useState<StoredRecommendation | null>(null);
   const [history, setHistory] = useState<StoredRecommendation[]>([]);
 
   const uvLabel = useMemo(() => {
@@ -132,7 +144,7 @@ export default function WeatherDashboard() {
           setError(
             loadError instanceof Error
               ? loadError.message
-              : "Не удалось загрузить историю поиска.",
+              : "Не удалось загрузить историю поиска."
           );
         }
       });
@@ -153,7 +165,7 @@ export default function WeatherDashboard() {
     }
 
     setIsLoading(true);
-    setError("");
+    setError(null);
 
     try {
       const response = await fetch("/api/recommendations", {
@@ -161,25 +173,24 @@ export default function WeatherDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ city: nextCity }),
       });
-      const payload = (await response.json()) as
-        | StoredRecommendation
-        | { error?: string };
+      const payload = (await response.json()) as StoredRecommendation | { error?: string };
 
       if (!response.ok || !("weather" in payload)) {
         throw new Error(
           "error" in payload && payload.error
             ? payload.error
-            : "Не удалось получить рекомендацию.",
+            : "Не удалось получить рекомендацию."
         );
       }
 
       setRecommendation(payload);
       setHistory(await fetchHistory());
+      setCity("");
     } catch (requestError: unknown) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Не удалось получить рекомендацию.",
+          : "Не удалось получить рекомендацию."
       );
     } finally {
       setIsLoading(false);
@@ -187,13 +198,13 @@ export default function WeatherDashboard() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-3">
-        <p className="inline-flex items-center gap-2 text-sm font-medium text-sky-700">
-          <Sparkles className="h-4 w-4" />
+        <p className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 bg-sky-50 px-3 py-1.5 rounded-full w-fit border border-sky-100">
+          <Sparkles className="h-4 w-4 animate-pulse text-sky-500" />
           WeatherWear AI
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
           Умный стилист по погоде
         </h1>
         <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
@@ -202,6 +213,7 @@ export default function WeatherDashboard() {
         </p>
       </header>
 
+      {/* Поисковая панель */}
       <form
         onSubmit={handleSearch}
         className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center"
@@ -229,77 +241,82 @@ export default function WeatherDashboard() {
         </button>
       </form>
 
+      {/* Ошибки */}
       {error ? (
-        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error}
-        </p>
+        <div className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <AlertCircle className="h-5 w-5 shrink-0 text-rose-500" />
+          <span>{error}</span>
+        </div>
       ) : null}
 
+      {/* Главный блок с текущей рекомендацией */}
       {recommendation ? (
         <section className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          {/* Погода */}
+          <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                   Текущая погода
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-950">
+                <h2 className="mt-2 text-2xl font-bold text-slate-950">
                   {recommendation.city}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-500 capitalize">
                   {recommendation.weather.condition}
                 </p>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 border border-sky-100">
                 <CloudSun className="h-6 w-6" />
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
                 <p className="inline-flex items-center gap-2 text-xs font-medium text-slate-500">
-                  <Thermometer className="h-4 w-4" />
+                  <Thermometer className="h-4 w-4 text-sky-500" />
                   Температура
                 </p>
                 <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
                   {recommendation.weather.temperature}°
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-slate-400">
                   Ощущается как {recommendation.weather.feelsLike}°C
                 </p>
               </div>
 
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
                 <p className="inline-flex items-center gap-2 text-xs font-medium text-slate-500">
-                  <Wind className="h-4 w-4" />
+                  <Wind className="h-4 w-4 text-sky-500" />
                   Ветер
                 </p>
                 <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
                   {recommendation.weather.windSpeed}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">метров в секунду</p>
+                <p className="mt-1 text-xs text-slate-400">м/с</p>
               </div>
 
-              <div className="rounded-2xl bg-slate-50 p-4">
+              <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
                 <p className="inline-flex items-center gap-2 text-xs font-medium text-slate-500">
-                  <Sun className="h-4 w-4" />
+                  <Sun className="h-4 w-4 text-amber-500" />
                   УФ-индекс
                 </p>
                 <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
                   {recommendation.weather.uvIndex}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">{uvLabel}</p>
+                <p className="mt-1 text-xs text-slate-400">{uvLabel}</p>
               </div>
             </div>
           </article>
 
+          {/* Рекомендации стилиста */}
           <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
                   AI Рекомендация стилиста
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-950">
+                <h2 className="mt-2 text-2xl font-bold text-slate-950">
                   Что надеть сегодня
                 </h2>
               </div>
@@ -307,20 +324,20 @@ export default function WeatherDashboard() {
             </div>
 
             <div className="mb-5 flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                <Shirt className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 border border-slate-200">
+                <Shirt className="h-3.5 w-3.5 text-slate-500" />
                 Слои
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                <Sun className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 border border-slate-200">
+                <Sun className="h-3.5 w-3.5 text-slate-500" />
                 УФ-индекс
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                <Footprints className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 border border-slate-200">
+                <Footprints className="h-3.5 w-3.5 text-slate-500" />
                 Обувь
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                <Umbrella className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 border border-slate-200">
+                <Umbrella className="h-3.5 w-3.5 text-slate-500" />
                 Аксессуары
               </span>
             </div>
@@ -331,19 +348,20 @@ export default function WeatherDashboard() {
           </article>
         </section>
       ) : (
-        <div className="rounded-3xl border border-dashed border-slate-300 bg-white/70 px-6 py-16 text-center text-sm text-slate-500">
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-white/70 px-6 py-16 text-center text-sm text-slate-500 shadow-sm">
           Введите город и нажмите «Найти», чтобы увидеть погоду и совет по одежде.
         </div>
       )}
 
+      {/* История запросов */}
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-2">
-          <Clock3 className="h-5 w-5 text-sky-600" />
+          <Clock3 className="h-5 w-5 text-sky-600 animate-pulse" />
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
               История поиска
             </p>
-            <h2 className="text-xl font-semibold text-slate-950">
+            <h2 className="text-xl font-bold text-slate-950">
               Прошлые запросы
             </h2>
           </div>
@@ -365,19 +383,22 @@ export default function WeatherDashboard() {
                     onClick={() => {
                       setCity(item.city);
                       setRecommendation(item);
-                      setError("");
+                      setError(null);
                     }}
-                    className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                    className={`w-full rounded-2xl border px-4 py-3 text-left transition duration-200 shadow-sm ${
                       isActive
-                        ? "border-sky-300 bg-sky-50"
-                        : "border-slate-200 bg-slate-50 hover:border-sky-200 hover:bg-white"
+                        ? "border-sky-300 bg-sky-50/70"
+                        : "border-slate-150 bg-slate-50 hover:border-sky-200 hover:bg-white"
                     }`}
                   >
-                    <p className="font-semibold text-slate-900">{item.city}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {item.weather.temperature}°C · {item.weather.condition}
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-slate-900 truncate">{item.city}</p>
+                      <p className="text-sm font-bold text-sky-700 shrink-0">{item.weather.temperature}°C</p>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500 capitalize">
+                      {item.weather.condition}
                     </p>
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="mt-1 text-[10px] text-slate-400">
                       {formatTime(item.createdAt)}
                     </p>
                   </button>
