@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Recommendation {
+  id                 String   @id @default(uuid())
+  city               String
+  temperature        Float
+  feelsLike          Float
+  condition          String
+  windSpeed          Float
+  uvIndex            Float
+  humidity           Float
+  recommendationText String
+  createdAt          DateTime @default(now())
+}
