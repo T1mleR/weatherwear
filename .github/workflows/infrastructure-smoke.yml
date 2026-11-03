@@ -1,0 +1,80 @@
+name: Infrastructure smoke checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feat/postgresql-docker-compose
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: weatherwear
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: weatherwear
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U weatherwear -d weatherwear"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://weatherwear:ci-only-password@127.0.0.1:5432/weatherwear?schema=public
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Validate Prisma schema and apply migrations
+        run: |
+          npx prisma validate
+          npx prisma migrate deploy
+
+      - name: Lint and type-check
+        run: |
+          npm run lint
+          npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Start app for PostgreSQL integration checks
+        run: |
+          npm run start > /tmp/weatherwear-server.log 2>&1 &
+          echo $! > /tmp/weatherwear-server.pid
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/weatherwear-server.log
+          exit 1
+
+      - name: API + database integration tests
+        run: node --test tests/integration/*.test.mjs
+
+      - name: Validate container image build
+        run: docker build --target runner -t weatherwear:ci .
+
+      - name: Server logs on failure
+        if: failure()
+        run: cat /tmp/weatherwear-server.log || true
