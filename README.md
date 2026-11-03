@@ -82,7 +82,11 @@ The Dockerfile is multi-stage, so the database migrator target is not bundled in
 - [x] Playwright feature-by-feature E2E specs, backend unit and integration tests, CI jobs prepared.
 - [x] GitHub Actions Playwright: 10/10 passing; Docker Compose smoke checks passed.
 - [ ] Verify Railway deployment and automatic production redeploy on a connected account.
-- [ ] Cloud hosting and secure push-to-deploy.
+- [ ] Cloud hosting and secure push-to-deploy (runbook: [docs/deploy-railway.md](docs/deploy-railway.md)).
 - [ ] AWS CloudFormation or GCP Terraform deployment after cost/account approval.
 
 Track all work in [GitHub Issues](https://github.com/T1mleR/weatherwear/issues); implementation PR references #1–#12 and #17.
+
+## First cloud deployment / evidence
+
+Railway's Compose importer steps, free-credit safeguards, GitHub autodeploy and live verification are documented in [docs/deploy-railway.md](docs/deploy-railway.md). After deploying, run `npm run test:deployment -- https://YOUR-DOMAIN` to verify production health, history and validation **without creating data**. No cloud account or billable workload has been provisioned by this repository alone.
