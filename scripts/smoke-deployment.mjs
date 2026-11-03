@@ -27,6 +27,10 @@ async function request(path, init) {
   }
 }
 
+const homepage = await request("/");
+assert.equal(homepage.status, 200, "Public homepage");
+assert.match(await homepage.text(), /WeatherWear AI/, "WeatherWear brand appears in HTML");
+
 const health = await request("/api/health");
 assert.equal(health.status, 200, "App and DB health check");
 assert.equal((await health.json()).status, "ok");

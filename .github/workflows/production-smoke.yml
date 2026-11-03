@@ -1,0 +1,26 @@
+name: Smoke test live deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_url:
+        description: "HTTPS URL of the deployed WeatherWear app"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      DEPLOY_URL: ${{ inputs.deployment_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify homepage and database-backed API
+        run: node scripts/smoke-deployment.mjs "$DEPLOY_URL"
