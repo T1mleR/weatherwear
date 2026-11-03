@@ -1,0 +1,226 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  WeatherWear educational AWS deployment. One low-resource EC2 instance hosts
+  Next.js frontend/API and PostgreSQL via Docker Compose. Free Plan credits
+  may be consumed. Do not launch on a Paid account.
+
+Parameters:
+  SourceRef:
+    Type: String
+    Default: feat/postgresql-docker-compose
+    Description: Public GitHub branch or SHA with infra/aws/bootstrap.sh.
+    AllowedPattern: "^[A-Za-z0-9._/-]+$"
+  BudgetAlertEmail:
+    Type: String
+    Description: Email for monthly AWS estimated usage alerts; not a spending cap.
+    AllowedPattern: "^[^ @]+@[^ @]+[.][^ @]+$"
+  EnableCloudFront:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Optional HTTPS CloudFront. First verify this service is allowed on your
+      AWS Free Plan and credits cover its usage.
+
+Conditions:
+  WithCloudFront: !Equals [!Ref EnableCloudFront, "true"]
+
+Resources:
+  DemoVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.87.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: weatherwear-education-vpc
+
+  DemoInternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  DemoVPCGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref DemoVPC
+      InternetGatewayId: !Ref DemoInternetGateway
+
+  DemoSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DemoVPC
+      CidrBlock: 10.87.1.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: weatherwear-public-subnet
+
+  DemoRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DemoVPC
+
+  DemoPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: DemoVPCGateway
+    Properties:
+      RouteTableId: !Ref DemoRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref DemoInternetGateway
+
+  DemoRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DemoRouteTable
+      SubnetId: !Ref DemoSubnet
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref DemoVPC
+      GroupDescription: WeatherWear web only, no inbound SSH/DB.
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP demo origin (CloudFront optional)
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  AppHost:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - DemoPublicRoute
+      - DemoRouteAssociation
+    Properties:
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      InstanceType: t3.micro
+      CreditSpecification:
+        CPUCredits: standard
+      Monitoring: false
+      InstanceInitiatedShutdownBehavior: stop
+      IamInstanceProfile: !Ref InstanceProfile
+      MetadataOptions:
+        HttpTokens: required
+        HttpEndpoint: enabled
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref AppSecurityGroup
+          SubnetId: !Ref DemoSubnet
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 20
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: weatherwear-free-plan-demo
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          exec > >(tee -a /var/log/weatherwear-init.log) 2>&1
+          dnf install -y git curl
+          git clone https://github.com/T1mleR/weatherwear.git /opt/weatherwear
+          cd /opt/weatherwear
+          git fetch --depth=1 origin ${SourceRef}
+          git checkout --detach FETCH_HEAD
+          /bin/bash infra/aws/bootstrap.sh
+
+  MonthlyUsageAlert:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Join ["", ["weatherwear-demo-", !Ref "AWS::StackName"]]
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: 5
+          Unit: USD
+        CostTypes:
+          IncludeCredit: false
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 20
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+
+  HttpsDistribution:
+    Type: AWS::CloudFront::Distribution
+    Condition: WithCloudFront
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Optional HTTPS demo (Free Account credit review required)
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        DefaultCacheBehavior:
+          TargetOriginId: WeatherWearEC2Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+        Origins:
+          - Id: WeatherWearEC2Origin
+            DomainName: !GetAtt AppHost.PublicDnsName
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: http-only
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+Outputs:
+  InstanceId:
+    Value: !Ref AppHost
+    Description: Use Systems Manager Session Manager, never open SSH.
+  InitialHttpUrl:
+    Description: HTTP demo origin. Use HTTPS CloudFront option when eligible.
+    Value: !Join ["", ["http://", !GetAtt AppHost.PublicDnsName]]
+  HttpsDemoUrl:
+    Condition: WithCloudFront
+    Description: HTTPS to viewers. EC2 origin still HTTP.
+    Value: !Join ["", ["https://", !GetAtt HttpsDistribution.DomainName]]
+  PublicDBPortOpen:
+    Value: "false"
+  Note:
+    Value: Delete stack after course demo to stop consuming Free Plan credits.
