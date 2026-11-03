@@ -1,0 +1,13 @@
+# Resource caps for a single t3.micro educational host (1 GiB RAM).
+# Applied alongside the repository's normal docker-compose.yml.
+# The database has NO published port; the app exposes port 80 through APP_PORT.
+services:
+  db:
+    mem_limit: 256m
+    cpus: 0.30
+  migrate:
+    mem_limit: 384m
+    cpus: 0.60
+  app:
+    mem_limit: 512m
+    cpus: 0.75
