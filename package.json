@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test:unit": "node --experimental-strip-types --test tests/unit/*.test.mjs",
     "test:integration": "node --test tests/integration/*.test.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:frontend": "node --experimental-strip-types --test tests/frontend/*.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

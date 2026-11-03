@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { formatTime, getUvLabel } from "@/lib/weatherDisplay";
 import {
   Clock3,
   CloudSun,
@@ -106,15 +107,6 @@ async function fetchHistory(): Promise<StoredRecommendation[]> {
   return (await response.json()) as StoredRecommendation[];
 }
 
-function formatTime(iso: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "numeric",
-    month: "short",
-  }).format(new Date(iso));
-}
-
 export default function WeatherDashboard() {
   const [city, setCity] = useState("Алматы");
   const [error, setError] = useState<string | null>(null);
@@ -122,13 +114,7 @@ export default function WeatherDashboard() {
   const [recommendation, setRecommendation] = useState<StoredRecommendation | null>(null);
   const [history, setHistory] = useState<StoredRecommendation[]>([]);
 
-  const uvLabel = useMemo(() => {
-    const uv = recommendation?.weather.uvIndex ?? 0;
-    if (uv >= 8) return "очень высокий";
-    if (uv >= 6) return "высокий";
-    if (uv >= 3) return "умеренный";
-    return "низкий";
-  }, [recommendation]);
+  const uvLabel = getUvLabel(recommendation?.weather.uvIndex ?? 0);
 
   useEffect(() => {
     let cancelled = false;

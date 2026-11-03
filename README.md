@@ -52,7 +52,8 @@ npm run dev
 Run `npm run lint` to lint. Test commands:
 
 ```bash
-npm run test:unit
+npm run test:frontend   # frontend display logic
+npm run test:unit       # backend recommendation rules
 npm run test:integration # requires running app + PostgreSQL
 npx playwright install chromium
 npm run test:e2e       # starts Next.js if not already running; requires DB
@@ -76,9 +77,11 @@ The Dockerfile is multi-stage, so the database migrator target is not bundled in
 - [x] PostgreSQL Prisma schema and initial SQL migration prepared.
 - [x] Single production Dockerfile (UI + API) prepared.
 - [x] Compose database + migrations + app prepared.
-- [ ] Confirm build, migration, healthcheck and data import on a Docker host (not yet run here).
+- [x] GitHub Actions has validated Docker Compose startup, PostgreSQL migrations, healthcheck and API smoke checks.
+- [ ] Restore/verify any existing SQLite history; only a read-only export/import procedure is prepared.
 - [x] Playwright feature-by-feature E2E specs, backend unit and integration tests, CI jobs prepared.
-- [ ] Confirm all Playwright tests and Docker Compose smoke checks pass in GitHub Actions.
+- [x] GitHub Actions Playwright: 10/10 passing; Docker Compose smoke checks passed.
+- [ ] Verify Railway deployment and automatic production redeploy on a connected account.
 - [ ] Cloud hosting and secure push-to-deploy.
 - [ ] AWS CloudFormation or GCP Terraform deployment after cost/account approval.
 

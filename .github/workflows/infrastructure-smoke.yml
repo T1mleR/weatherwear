@@ -49,6 +49,9 @@ jobs:
           npx prisma validate
           npx prisma migrate deploy
 
+      - name: Frontend display unit tests
+        run: npm run test:frontend
+
       - name: Backend recommendation unit tests
         run: npm run test:unit
 
