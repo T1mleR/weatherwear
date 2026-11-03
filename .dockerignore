@@ -1,0 +1,16 @@
+# Keep builds reproducible and never copy credentials or local database files
+.git
+.github
+node_modules
+.next
+out
+coverage
+playwright-report
+test-results
+.env
+.env.*
+prisma/*.db
+prisma/*.db-*
+migration-backup
+*.log
+.DS_Store
