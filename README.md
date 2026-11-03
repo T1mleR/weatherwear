@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WeatherWear AI
 
-## Getting Started
+Next.js 16 / React 19 weather and outfit recommendations. The Next.js server handles both the frontend and the API. PostgreSQL and Prisma persist recommendation history.
 
-First, run the development server:
+## Local deployment — Docker Compose
+
+Requirements: Docker Engine with the Compose plugin. Copy the non-secret example configuration:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Change `POSTGRES_PASSWORD` in `.env` to a long alphanumeric value (and update the `DATABASE_URL` password to match for optional host-side commands). **Never commit `.env`**.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+docker compose up --build -d
+docker compose ps
+curl -f http://localhost:3000/api/health
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Visit http://localhost:3000. The Compose stack includes:
+- `db`: PostgreSQL 16 with durable named volume `postgres_data`;
+- `migrate`: a one-shot `prisma migrate deploy` from the same Dockerfile;
+- `app`: production Next.js standalone image, including frontend and API.
 
-## Learn More
+The app starts after the DB becomes healthy and migrations succeed. `docker compose logs app` and `docker compose logs migrate` provide diagnostics. Stop with `docker compose down` (keeps DB volume). **Do not run `docker compose down -v` unless you intend to delete all PostgreSQL data.**
 
-To learn more about Next.js, take a look at the following resources:
+### Export existing SQLite history (optional)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This repository previously used `prisma/dev.db`. **Back it up before changing anything.** Run:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+python3 scripts/export-sqlite.py prisma/dev.db migration-backup/recommendations.json
+docker compose up --build -d
+docker compose run --rm --no-deps -v "$PWD/migration-backup:/backup:ro" migrate \
+  node /app/scripts/import-recommendations.mjs /backup/recommendations.json
+```
 
-## Deploy on Vercel
+Export is read-only, creates a local JSON backup and refuses to overwrite an existing one. Import is idempotent by record ID (`skipDuplicates`), and reports row counts. If the source DB is empty, importing is optional. Verify history via `GET /api/recommendations` before retiring the SQLite file. Never commit export JSON, SQLite DB or credentials. Note: the original `prisma/dev.db` is already tracked in the repository's history; this change intentionally does not delete it until its data has been verified/migrated.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Developing without Docker for Next.js
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Use Node.js 22, a reachable PostgreSQL database, and set `DATABASE_URL` from `.env`. For example, start PostgreSQL with `docker compose up -d db`, then:
+
+```bash
+npm ci
+npx prisma generate
+npx prisma migrate deploy
+npm run dev
+```
+
+Run `npm run lint` to lint. Test commands:
+
+```bash
+npm run test:frontend   # frontend display logic
+npm run test:unit       # backend recommendation rules
+npm run test:integration # requires running app + PostgreSQL
+npx playwright install chromium
+npm run test:e2e       # starts Next.js if not already running; requires DB
+```
+
+Playwright uses deterministic browser-side API mocks for all eight user-facing features; no paid API or live weather provider is needed for E2E. Backend unit tests verify cold/mild/hot/rain/wind/UV recommendation rules. Integration tests verify API and PostgreSQL persistence. GitHub Actions also builds and smoke-tests the entire Docker Compose stack. Frontend components and API routes share one Next.js codebase. Open http://localhost:3000 and check `GET /api/health`, `GET /api/recommendations`, `POST /api/recommendations` (`{"city":"Алматы"}`).
+
+## Architecture
+
+- UI: `components/WeatherDashboard.tsx`, Next.js App Router.
+- API: `app/api/recommendations/route.ts` (GET history / POST new recommendation).
+- Weather: Open-Meteo via `services/weatherService.ts`.
+- Persistence: Prisma `Recommendation` model with PostgreSQL.
+- Health/readiness: `app/api/health/route.ts`.
+- Deployment: `Dockerfile` builds static assets plus Next.js server in **one production app image**, managed with `docker-compose.yml`.
+
+The Dockerfile is multi-stage, so the database migrator target is not bundled into the production image. Passwords are injected at runtime rather than baked into images. Prefer deploy-time secret management and managed volumes in cloud hosting.
+
+## Coursework status
+
+- [x] PostgreSQL Prisma schema and initial SQL migration prepared.
+- [x] Single production Dockerfile (UI + API) prepared.
+- [x] Compose database + migrations + app prepared.
+- [x] GitHub Actions has validated Docker Compose startup, PostgreSQL migrations, healthcheck and API smoke checks.
+- [ ] Restore/verify any existing SQLite history; only a read-only export/import procedure is prepared.
+- [x] Playwright feature-by-feature E2E specs, backend unit and integration tests, CI jobs prepared.
+- [x] GitHub Actions Playwright: 10/10 passing; Docker Compose smoke checks passed.
+- [ ] Verify Railway deployment and automatic production redeploy on a connected account.
+- [ ] Cloud hosting and secure push-to-deploy (runbook: [docs/deploy-railway.md](docs/deploy-railway.md)).
+- [ ] AWS CloudFormation or GCP Terraform deployment after cost/account approval.
+
+Track all work in [GitHub Issues](https://github.com/T1mleR/weatherwear/issues); implementation PR references #1–#12 and #17.
+
+## First cloud deployment / evidence
+
+Railway's Compose importer steps, free-credit safeguards, GitHub autodeploy and live verification are documented in [docs/deploy-railway.md](docs/deploy-railway.md). After deploying, run `npm run test:deployment -- https://YOUR-DOMAIN` to verify production health, history and validation **without creating data**. No cloud account or billable workload has been provisioned by this repository alone.
