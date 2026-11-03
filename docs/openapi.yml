@@ -1,49 +1,69 @@
 openapi: 3.0.3
 info:
-  title: WeatherWear AI API
-  description: In-memory API рекомендаций по одежде на основе погоды.
-  version: 0.2.0
+  title: WeatherWear API
+  description: |
+    WeatherWear runs on Next.js. Real weather is requested from Open-Meteo
+    and successful clothing recommendations are stored in PostgreSQL via Prisma.
+  version: 1.0.0
 servers:
   - url: http://localhost:3000
-    description: Local development
+    description: Local Docker Compose deployment
 
 tags:
+  - name: Health
+    description: Application and database readiness
   - name: Recommendations
-    description: Генерация и история советов стилиста
+    description: Weather-based outfit recommendation and persisted history
 
 paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Check application and database readiness
+      operationId: getHealth
+      responses:
+        "200":
+          description: Application and PostgreSQL are ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+              example: {status: ok}
+        "503":
+          description: Database connection unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+              example: {status: unavailable}
+
   /api/recommendations:
     get:
       tags: [Recommendations]
-      summary: Получить историю рекомендаций
-      description: Возвращает все сохранённые рекомендации из in-memory хранилища. После перезапуска сервера список пустой.
+      summary: List saved recommendations, latest first
       operationId: listRecommendations
       responses:
         "200":
-          description: Список рекомендаций, новые сверху
+          description: List of persisted recommendations
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/Recommendation"
-              example:
-                - id: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-                  city: "Алматы"
-                  createdAt: "2026-10-20T07:30:00.000Z"
-                  weather:
-                    temperature: 18
-                    feelsLike: 16
-                    condition: "Переменная облачность"
-                    windSpeed: 4
-                    uvIndex: 6
-                    humidity: 42
-                  recommendationText: "Совет стилиста для города Алматы..."
+        "500":
+          description: Database query failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
     post:
       tags: [Recommendations]
-      summary: Создать рекомендацию по городу
-      description: Принимает город, генерирует mock-погоду и совет по одежде, сохраняет результат в память и возвращает созданный объект.
+      summary: Search city weather and save a clothing recommendation
+      description: |
+        Uses Open-Meteo geocoding and weather APIs, generates outfit advice
+        from weather conditions and stores the result in PostgreSQL.
       operationId: createRecommendation
       requestBody:
         required: true
@@ -51,31 +71,41 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateRecommendationRequest"
-            example:
-              city: "Алматы"
+            example: {city: "Алматы"}
       responses:
         "201":
-          description: Рекомендация создана и сохранена
+          description: Recommendation generated and saved
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Recommendation"
         "400":
-          description: Невалидный запрос — пустой город или некорректный JSON
+          description: Invalid JSON or empty city
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples:
                 missingCity:
-                  value:
-                    error: "City is required"
+                  value: {error: "City is required"}
                 invalidJson:
-                  value:
-                    error: "Invalid JSON"
+                  value: {error: "Invalid JSON"}
+        "500":
+          description: Weather lookup failed, unknown city or database failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
     CreateRecommendationRequest:
       type: object
       required: [city]
@@ -83,58 +113,37 @@ components:
         city:
           type: string
           minLength: 1
-          description: Название города
-          example: "Москва"
-
+          example: "Алматы"
     Weather:
       type: object
-      required:
-        - temperature
-        - feelsLike
-        - condition
-        - windSpeed
-        - uvIndex
-        - humidity
+      required: [temperature, feelsLike, condition, windSpeed, uvIndex, humidity]
       properties:
         temperature:
           type: number
-          description: Температура в °C
-          example: 18
+          description: Temperature in Celsius
         feelsLike:
           type: number
-          description: Ощущаемая температура в °C
-          example: 16
+          description: Feels-like temperature in Celsius
         condition:
           type: string
-          example: "Переменная облачность"
+          description: Weather condition as Russian text
         windSpeed:
           type: number
-          description: Скорость ветра, м/с
-          example: 4
+          description: Wind speed in meters per second
         uvIndex:
           type: number
-          description: УФ-индекс
-          example: 6
         humidity:
           type: number
-          description: Влажность, %
-          example: 42
-
+          description: Relative humidity percent
     Recommendation:
       type: object
-      required:
-        - id
-        - city
-        - createdAt
-        - weather
-        - recommendationText
+      required: [id, city, createdAt, weather, recommendationText]
       properties:
         id:
           type: string
           format: uuid
         city:
           type: string
-          example: "Алматы"
         createdAt:
           type: string
           format: date-time
@@ -142,12 +151,9 @@ components:
           $ref: "#/components/schemas/Weather"
         recommendationText:
           type: string
-          description: Подробный текст совета по слоям, УФ-индексу, обуви и аксессуарам
-
     ErrorResponse:
       type: object
       required: [error]
       properties:
         error:
           type: string
-          example: "City is required"
