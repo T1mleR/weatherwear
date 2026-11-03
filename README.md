@@ -49,7 +49,16 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-Run `npm run lint` to lint. Frontend components and API routes share one Next.js codebase. Open http://localhost:3000 and check `GET /api/health`, `GET /api/recommendations`, `POST /api/recommendations` (`{"city":"Алматы"}`).
+Run `npm run lint` to lint. Test commands:
+
+```bash
+npm run test:unit
+npm run test:integration # requires running app + PostgreSQL
+npx playwright install chromium
+npm run test:e2e       # starts Next.js if not already running; requires DB
+```
+
+Playwright uses deterministic browser-side API mocks for all eight user-facing features; no paid API or live weather provider is needed for E2E. Backend unit tests verify cold/mild/hot/rain/wind/UV recommendation rules. Integration tests verify API and PostgreSQL persistence. GitHub Actions also builds and smoke-tests the entire Docker Compose stack. Frontend components and API routes share one Next.js codebase. Open http://localhost:3000 and check `GET /api/health`, `GET /api/recommendations`, `POST /api/recommendations` (`{"city":"Алматы"}`).
 
 ## Architecture
 
@@ -68,8 +77,9 @@ The Dockerfile is multi-stage, so the database migrator target is not bundled in
 - [x] Single production Dockerfile (UI + API) prepared.
 - [x] Compose database + migrations + app prepared.
 - [ ] Confirm build, migration, healthcheck and data import on a Docker host (not yet run here).
-- [ ] Playwright feature-by-feature E2E tests and CI.
+- [x] Playwright feature-by-feature E2E specs, backend unit and integration tests, CI jobs prepared.
+- [ ] Confirm all Playwright tests and Docker Compose smoke checks pass in GitHub Actions.
 - [ ] Cloud hosting and secure push-to-deploy.
 - [ ] AWS CloudFormation or GCP Terraform deployment after cost/account approval.
 
-Track all work in [GitHub Issues](https://github.com/T1mleR/weatherwear/issues); implementation PR references #9, #10, #11.
+Track all work in [GitHub Issues](https://github.com/T1mleR/weatherwear/issues); implementation PR references #1–#12 and #17.

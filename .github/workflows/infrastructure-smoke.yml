@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - feat/postgresql-docker-compose
 
 permissions:
   contents: read
@@ -50,6 +49,9 @@ jobs:
           npx prisma validate
           npx prisma migrate deploy
 
+      - name: Backend recommendation unit tests
+        run: npm run test:unit
+
       - name: Lint and type-check
         run: |
           npm run lint
@@ -70,7 +72,23 @@ jobs:
           exit 1
 
       - name: API + database integration tests
-        run: node --test tests/integration/*.test.mjs
+        run: npm run test:integration
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Frontend feature E2E tests (Playwright)
+        run: npm run test:e2e
+
+      - name: Upload Playwright failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
 
       - name: Validate container image build
         run: docker build --target runner -t weatherwear:ci .
@@ -78,3 +96,32 @@ jobs:
       - name: Server logs on failure
         if: failure()
         run: cat /tmp/weatherwear-server.log || true
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      POSTGRES_USER: weatherwear
+      POSTGRES_DB: weatherwear
+      POSTGRES_PASSWORD: ci-only-password
+      APP_PORT: "3000"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the entire Compose stack
+        run: docker compose up --build -d
+      - name: Check app readiness, API and database
+        run: |
+          docker compose ps
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3000/api/health; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3000/api/health
+          curl -fsS http://127.0.0.1:3000/api/recommendations
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"city":""}' http://127.0.0.1:3000/api/recommendations)" = "400"
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color || true
+      - name: Stop Compose services without deleting data volume
+        if: always()
+        run: docker compose down
