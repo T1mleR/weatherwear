@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feat/postgresql-docker-compose
+      - feat/devops-observability
 
 permissions:
   contents: read
