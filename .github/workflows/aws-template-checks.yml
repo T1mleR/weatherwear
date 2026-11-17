@@ -35,3 +35,11 @@ jobs:
         env:
           POSTGRES_PASSWORD: ci-validation-only
         run: docker compose -f docker-compose.yml -f infra/aws/docker-compose.aws.yml config -q
+
+      - name: Validate IPv4 preference is effective for app service
+        env:
+          POSTGRES_PASSWORD: ci-validation-only
+        run: |
+          docker compose -f docker-compose.yml -f infra/aws/docker-compose.aws.yml config --format json > /tmp/weatherwear-compose.json
+          python -c 'import json; cfg=json.load(open("/tmp/weatherwear-compose.json")); assert cfg["services"]["app"]["environment"]["NODE_OPTIONS"] == "--dns-result-order=ipv4first"; print("AWS app NODE_OPTIONS verified")'
+
