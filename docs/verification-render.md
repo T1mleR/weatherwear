@@ -40,3 +40,7 @@ The current commit adding this document is a **non-functional test commit**. Che
 - Initial cloud deployment is on the feature branch. Do not merge to main or switch production branch without reviewing migrations, credentials and green CI.
 - A successful browser search was confirmed, but history persistence after reload and SQLite record transfer still require separate evidence.
 - No paid plan or infrastructure has been provisioned.
+
+## Update — 2026-11-17
+
+The separate AWS Free Plan EC2/CloudFormation deployment is now live. The project owner confirmed weather and outfit recommendation search on AWS, plus PostgreSQL-backed history preserved after page refresh; details are in [AWS Issue #15](https://github.com/T1mleR/weatherwear/issues/15). This does not change Render's architecture: Render still runs a Dockerfile-based Web Service and separately managed PostgreSQL, not a single hosted Docker Compose stack. Render CI-gated autodeploy is documented above and in Issue #16 for the **feature branch**; the PR is not yet merged into `main`. For a current acceptance matrix, see [submission status](submission-status.md).
