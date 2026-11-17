@@ -1,0 +1,12 @@
+groups:
+  - name: weatherwear-application
+    rules:
+      - alert: WeatherSearchFailures
+        expr: increase(weatherwear_search_failures_total[5m]) >= 3
+        for: 0m
+        labels:
+          severity: warning
+          owner: weatherwear
+        annotations:
+          summary: WeatherWear weather-search errors are increasing
+          description: At least three failed external weather lookups in the last five minutes. Check API /api/recommendations, Open-Meteo connectivity, and container logs.
