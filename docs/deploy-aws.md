@@ -1,7 +1,8 @@
 # WeatherWear on AWS Free Account — CloudFormation
 
-Status: CloudFormation code is prepared. **NO AWS resources have been provisioned.**
-Live first deployment remains on Render: https://weatherwear-app.onrender.com
+Status (2026-11-17): **LIVE AWS Free Plan deployment verified by the owner.** CloudFormation stack `weatherwear-coursework-free` is `CREATE_COMPLETE` in Sydney (`ap-southeast-2`). EC2 Docker Compose app + PostgreSQL run; weather search and saved history after page refresh were confirmed. Use `http://ec2-54-206-140-173.ap-southeast-2.compute.amazonaws.com` (HTTP only; public DNS may change). Render remains the first HTTPS deployment: https://weatherwear-app.onrender.com.
+
+The owner fixed Amazon Linux's `curl-minimal` conflict, installed a compatible Docker Buildx, and applied `NODE_OPTIONS=--dns-result-order=ipv4first` in the AWS Compose overlay. Details: [Issue #15](https://github.com/T1mleR/weatherwear/issues/15).
 
 This is a **single-server educational demo**, not a fault-tolerant commercial deployment. The existing root Docker Compose runs the frontend/API, PostgreSQL, and one-shot migrations together on EC2.
 
@@ -66,7 +67,7 @@ Then test searching Алматы and refreshing saved history. Do not share data
 
 ## 5. CI/CD and submission proof
 
-The existing GitHub workflow already tests frontend/backend, PostgreSQL integration, Playwright and Docker Compose. AWS deployment is deliberately manual until Free Plan limits and role permissions are confirmed. For push-to-deploy, add a least-privilege GitHub OIDC role plus an SSM deployment command after this initial stack passes. Never store AWS access keys in GitHub.
+The existing GitHub workflow already tests frontend/backend, PostgreSQL integration, Playwright and Docker Compose. **AWS deployment updates are presently manual**; there is no GitHub-triggered AWS redeploy. The initial manually provisioned instance is live. Do not claim AWS autodeploy has been implemented. For push-to-deploy, add a least-privilege GitHub OIDC role plus an SSM deployment command after this initial stack passes. Never store AWS access keys in GitHub.
 
 Record in GitHub Issue #15: stack CREATE_COMPLETE, resource list, EC2 type, public app URL, health check, Compose services, weather search, data persistence, Free account credit balance, and any CloudFront endpoint (without sensitive details).
 
@@ -78,11 +79,12 @@ After demonstration: CloudFormation -> select weatherwear-coursework-free -> Del
 
 - [x] CloudFormation, Compose and resource caps prepared in GitHub
 - [x] Automated static validation configured
-- [ ] Confirm actual AWS Free plan and credit balance
-- [ ] Deploy CloudFormation stack after authorization
-- [ ] Test AWS URL, Next.js API, PostgreSQL persistence
-- [ ] Verify cleanup and costs
-- [ ] Add AWS-specific CI-gated redeployment, if required
+- [x] Owner confirmed Free account plan and selected AWS Sydney region; budget configured (remaining balance still requires owner-side billing inspection)
+- [x] CloudFormation stack deployed after owner authorization; CREATE_COMPLETE confirmed
+- [x] AWS URL, Next.js API, live Open-Meteo weather, PostgreSQL persistence after refresh verified by owner
+- [ ] Monitor Free Plan credit balance and capture final screenshots before cleanup
+- [ ] Delete stack after coursework demo and confirm DELETE_COMPLETE
+- [ ] Add AWS-specific CI-gated redeployment only if separately required and permitted in Free Plan
 
 ### 2026-11-17 region correction
 
