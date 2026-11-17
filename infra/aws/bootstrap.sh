@@ -23,6 +23,18 @@ sha256sum -c docker-compose-linux-x86_64.sha256
 install -m 0755 docker-compose-linux-x86_64 "$PLUGIN_DIR/docker-compose"
 docker compose version
 
+# Amazon Linux 2023 Docker 25 can bundle Buildx older than v0.17.
+# Docker Compose v2.40.3 requires Buildx >= v0.17 for image builds.
+# Pin a compatible linux/amd64 binary and check its published Docker image SHA256.
+BUILDX_VERSION="v0.20.1"
+BUILDX_SHA256="8c38f60308a895fa570f1410e453c5de11aafd65a99fa99965d96d24b6225a78"
+curl -fSL --retry 4 \
+  "https://github.com/docker/buildx/releases/download/${BUILDX_VERSION}/buildx-${BUILDX_VERSION}.linux-amd64" \
+  -o /tmp/weatherwear-compose-install/docker-buildx
+printf '%s  %s\n' "$BUILDX_SHA256" /tmp/weatherwear-compose-install/docker-buildx | sha256sum -c -
+install -m 0755 /tmp/weatherwear-compose-install/docker-buildx "$PLUGIN_DIR/docker-buildx"
+docker buildx version
+
 # A free-tier micro EC2 host has little RAM. Swap prevents transient build OOM.
 # Swap is on the encrypted gp3 root EBS volume; it is NOT free extra RAM.
 if ! swapon --show=NAME --noheadings | grep -qx /swapfile; then
