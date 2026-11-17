@@ -6,7 +6,9 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
-dnf install -y docker git curl openssl
+# AL2023 ships curl-minimal, which already provides curl. Installing full curl
+# conflicts with curl-minimal and causes cloud-init to stop before Docker starts.
+dnf install -y docker git openssl
 systemctl enable --now docker
 
 # Install a pinned Compose v2 plugin; validate its checksum from the release.
