@@ -72,21 +72,22 @@ Playwright uses deterministic browser-side API mocks for all eight user-facing f
 
 The Dockerfile is multi-stage, so the database migrator target is not bundled into the production image. Passwords are injected at runtime rather than baked into images. Prefer deploy-time secret management and managed volumes in cloud hosting.
 
-## Coursework status
+## Coursework verification (2026-11-17)
 
-- [x] PostgreSQL Prisma schema and initial SQL migration prepared.
-- [x] Single production Dockerfile (UI + API) prepared.
-- [x] Compose database + migrations + app prepared.
-- [x] GitHub Actions has validated Docker Compose startup, PostgreSQL migrations, healthcheck and API smoke checks.
-- [ ] Restore/verify any existing SQLite history; only a read-only export/import procedure is prepared.
-- [x] Playwright feature-by-feature E2E specs, backend unit and integration tests, CI jobs prepared.
-- [x] GitHub Actions Playwright: 10/10 passing; Docker Compose smoke checks passed.
-- [ ] Verify Railway deployment and automatic production redeploy on a connected account.
-- [ ] Cloud hosting and secure push-to-deploy (runbook: [docs/deploy-railway.md](docs/deploy-railway.md)).
-- [ ] AWS CloudFormation or GCP Terraform deployment after cost/account approval.
+The app has been deployed to **Render** (HTTPS Docker Web Service with managed PostgreSQL) and **AWS EC2** (CloudFormation + full Docker Compose with PostgreSQL). The project owner confirmed that weather searches return outfit advice on AWS and the PostgreSQL-backed history persists after refreshing the page. Render is configured to auto-deploy **after CI checks pass** on the feature branch; AWS updates are currently **manual**.
 
-Track all work in [GitHub Issues](https://github.com/T1mleR/weatherwear/issues); implementation PR references #1–#12 and #17.
+- **Live Render:** https://weatherwear-app.onrender.com (HTTPS)
+- **AWS EC2 origin:** http://ec2-54-206-140-173.ap-southeast-2.compute.amazonaws.com (HTTP only; ephemeral EC2 public DNS may change)
+- **AWS infrastructure:** [CloudFormation template](infra/aws/cloudformation.yaml), [Compose overlay](infra/aws/docker-compose.aws.yml), [AWS deployment guide](docs/deploy-aws.md)
+- **CI evidence:** [Infrastructure smoke checks](https://github.com/T1mleR/weatherwear/actions/runs/44054541535) and [AWS template checks](https://github.com/T1mleR/weatherwear/actions/runs/44054541543), both successful for `336a620`
+- **Live-deployment evidence:** [Render verification](docs/verification-render.md), [AWS Issue #15](https://github.com/T1mleR/weatherwear/issues/15), [CI/CD Issue #16](https://github.com/T1mleR/weatherwear/issues/16)
+- **Detailed pass/gap review:** [Coursework acceptance and submission checklist](docs/submission-status.md)
+- **Implementation under review:** [PR #18](https://github.com/T1mleR/weatherwear/pull/18) on branch `feat/postgresql-docker-compose`; it has **not** been merged into `main`.
 
-## First cloud deployment / evidence
+### Remaining evidence and limitations
 
-Railway's Compose importer steps, free-credit safeguards, GitHub autodeploy and live verification are documented in [docs/deploy-railway.md](docs/deploy-railway.md). After deploying, run `npm run test:deployment -- https://YOUR-DOMAIN` to verify production health, history and validation **without creating data**. No cloud account or billable workload has been provisioned by this repository alone.
+The SQLite-to-PostgreSQL **schema** migration is implemented, and an optional export/import process exists, but importing **pre-existing SQLite records** has not been verified. Frontend display logic tests pass; independent component tests from Issue #13 remain open. Security dependency audit Issue #19 remains open. AWS auto-deployment after GitHub CI is not implemented; only Render's CI-gated feature-branch auto-deploy is verified.
+
+Render does **not** host the root `docker-compose.yml` directly: Compose is run in CI and on the AWS instance. AWS uses an **HTTP** origin only; optional HTTPS CloudFront was deliberately not enabled to avoid extra Free Plan resource use. AWS Free Plan infrastructure consumes credits until the CloudFormation stack is deleted. Capture screenshots and remove the AWS stack **after** demonstration and backing up data if needed.
+
+Track detailed scope and proof in [GitHub Issues](https://github.com/T1mleR/weatherwear/issues). Final deliverable: GitHub repository URL with the relevant feature branch/PR and evidence links.
