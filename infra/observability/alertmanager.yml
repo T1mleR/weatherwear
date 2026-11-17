@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 2m
+
+route:
+  receiver: ai-oncall
+  group_by: [alertname]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 2h
+
+receivers:
+  - name: ai-oncall
+    webhook_configs:
+      - url: http://oncall-agent:8080/alerts
+        send_resolved: true

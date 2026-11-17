@@ -1,0 +1,136 @@
+name: Part 2 - manual development to production promotion
+
+# This workflow only triggers when a human clicks Run workflow.
+# GitHub normally lists workflow_dispatch workflows after the workflow exists on main.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PROMOTE to release the selected ref to production"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weatherwear-production-promotion
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: inputs.confirm == 'PROMOTE'
+    name: Validate selected development commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: weatherwear
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: weatherwear
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U weatherwear -d weatherwear"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://weatherwear:ci-only-password@127.0.0.1:5432/weatherwear?schema=public
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked packages
+        run: npm ci
+      - name: Prisma migration
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Frontend and backend tests
+        run: |
+          npm run test:frontend
+          npm run test:unit
+      - name: Lint, typecheck and build
+        run: |
+          npm run lint
+          npx tsc --noEmit
+          npm run build
+      - name: Start integration test server
+        run: |
+          npm run start > /tmp/weatherwear-app.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3000/api/health; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/weatherwear-app.log
+          exit 1
+      - name: PostgreSQL integration checks
+        run: npm run test:integration
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run 10 end-to-end feature tests
+        run: npm run test:e2e
+      - name: Validate Docker image
+        run: docker build --target runner -t weatherwear:promotion .
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: part2-promotion-failures
+          path: |
+            /tmp/weatherwear-app.log
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
+  promote:
+    needs: verify
+    name: Manual production promotion via Render
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 8
+    env:
+      RENDER_PRODUCTION_DEPLOY_HOOK: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK }}
+      PRODUCTION_URL: https://weatherwear-app.onrender.com
+      RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Require a configured production hook
+        run: |
+          if [ -z "$RENDER_PRODUCTION_DEPLOY_HOOK" ]; then
+            echo "::error::Missing production environment secret RENDER_PRODUCTION_DEPLOY_HOOK"
+            exit 1
+          fi
+          case "$RENDER_PRODUCTION_DEPLOY_HOOK" in
+            https://*) ;;
+            *) echo "::error::Render hook must use HTTPS"; exit 1 ;;
+          esac
+      - name: Promote the exact validated development SHA
+        shell: bash
+        run: |
+          if [[ "$RENDER_PRODUCTION_DEPLOY_HOOK" == *"?"* ]]; then sep="&"; else sep="?"; fi
+          # Never echo the secret deploy-hook URL.
+          curl --fail --silent --show-error --retry 2 --request POST \
+            "$RENDER_PRODUCTION_DEPLOY_HOOK${sep}ref=$RELEASE_SHA" > /tmp/render-promotion.json
+          echo "Production deploy requested for validated git SHA: $RELEASE_SHA"
+          echo "Render ref-specific deploy hooks disable ordinary autodeploy; see docs."
+      - name: Production basic availability check
+        shell: bash
+        run: |
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error --max-time 10 "$PRODUCTION_URL/api/health" > /tmp/health.json; then
+              if grep -q '"status":"ok"' /tmp/health.json; then
+                echo "Public API and database reachable."
+                echo "Check Render dashboard for deployed commit $RELEASE_SHA before claiming promotion complete."
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+          echo "::error::Production health check did not pass"
+          exit 1

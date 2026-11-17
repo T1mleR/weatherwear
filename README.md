@@ -91,3 +91,17 @@ The SQLite-to-PostgreSQL **schema** migration is implemented, and an optional ex
 Render does **not** host the root `docker-compose.yml` directly: Compose is run in CI and on the AWS instance. AWS uses an **HTTP** origin only; optional HTTPS CloudFront was deliberately not enabled to avoid extra Free Plan resource use. AWS Free Plan infrastructure consumes credits until the CloudFormation stack is deleted. Capture screenshots and remove the AWS stack **after** demonstration and backing up data if needed.
 
 Track detailed scope and proof in [GitHub Issues](https://github.com/T1mleR/weatherwear/issues). Final deliverable: GitHub repository URL with the relevant feature branch/PR and evidence links.
+
+
+## Part 2 — DevOps & Observability (development branch)
+
+Part 2 work is in `feat/devops-observability` and is **not currently deployed** to the live AWS/Render production services.
+
+- **Separate environments:** isolated local Docker Compose development stack on http://localhost:3001, with its own PostgreSQL volume, versus the existing Render/AWS production infrastructure.
+- **Manual promotion:** GitHub Actions `workflow_dispatch` verifies the selected commit with frontend/backend/integration/E2E checks, then (only with production approval + deploy-hook secret) deploys that exact commit to Render.
+- **OpenTelemetry:** a dependency-free, manually instrumented **OTLP/HTTP JSON** exporter emits real metrics, traces and structured logs for weather searches. It is not the full OpenTelemetry JS SDK.
+- **Dashboard:** local Grafana displays request counts, failure counts, request/error rates and p95 latency; OpenTelemetry Collector forwards metrics to Prometheus, traces to Tempo and logs to Loki.
+- **Alert + AI on-call:** Prometheus/Alertmanager sends three-or-more search failures in five minutes to a read-only responder that uses a local **Ollama** model. AI analysis requires Ollama running; otherwise it stores a non-AI runbook, explicitly labeled.
+- **Deployment limits:** no paid cloud resources created; full live monitoring, AI alerts and manual production promotion still need demonstration and environment secrets.
+
+**Full setup, evidence and commands:** [Part 2 DevOps & Observability guide](docs/part2-devops-observability.md).

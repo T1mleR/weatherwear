@@ -1,0 +1,47 @@
+name: Part 2 - observability checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/devops-observability
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-monitoring:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate development environment Compose
+        run: |
+          docker compose --env-file .env.development.example \
+            -f docker-compose.yml \
+            -f infra/observability/docker-compose.dev.yml config -q
+          docker compose --env-file .env.development.example \
+            -f docker-compose.yml \
+            -f infra/observability/docker-compose.dev.yml config --format json > /tmp/dev-compose.json
+          python3 -c 'import json; c=json.load(open("/tmp/dev-compose.json")); assert c["name"]=="weatherwear-development"; assert c["services"]["app"]["environment"]["DEPLOYMENT_ENVIRONMENT"]=="development"; assert "otel-collector" in c["services"]; print("Development isolation and OTLP configuration verified")'
+      - name: Parse dashboard and observability YAML
+        run: |
+          python3 -m pip install pyyaml
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import yaml
+          root=Path("infra/observability")
+          for path in sorted(root.glob("*.yml")) + sorted(root.glob("*.yaml")):
+              yaml.safe_load(path.read_text())
+              print("YAML parsed:", path)
+          d=json.loads((root/"dashboard.json").read_text())
+          assert len(d["panels"]) >= 5
+          alerts=yaml.safe_load((root/"alerts.yml").read_text())
+          assert alerts["groups"][0]["rules"][0]["alert"] == "WeatherSearchFailures"
+          print("Grafana dashboard and WeatherSearchFailures rule verified")
+          PY
+      - name: Test read-only AI on-call responder
+        run: python3 -m unittest discover -s infra/observability/oncall -p "test_*.py" -v
