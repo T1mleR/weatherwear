@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 type Result = "success" | "invalid_input" | "upstream_error";
 
 const boundaries = [100, 250, 500, 1000, 2500, 5000, 10000];
-const processStartNs = (BigInt(Date.now()) * 1000000n).toString();
+const processStartNs = String(Date.now()) + "000000";
 let totalRequests = 0;
 let totalFailures = 0;
 let totalDuration = 0;
@@ -32,7 +32,7 @@ function resource() {
 }
 
 function nanos() {
-  return (BigInt(Date.now()) * 1000000n).toString();
+  return String(Date.now()) + "000000";
 }
 
 async function exportSignal(
@@ -71,7 +71,7 @@ export async function recordSearchTelemetry(
   const traceId = randomBytes(16).toString("hex");
   const spanId = randomBytes(8).toString("hex");
   const successful = result === "success";
-  const startNs = (BigInt(now) - BigInt(elapsed) * 1000000n).toString();
+  const startNs = String(Math.max(0, Number(now.slice(0, -6)) - elapsed)) + "000000";
   const common = [attr("http.route", "/api/recommendations"), attr("app.result", result)];
   const point = {
     startTimeUnixNano: processStartNs,
