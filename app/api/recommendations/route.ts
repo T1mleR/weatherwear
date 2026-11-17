@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRealWeather } from '@/services/weatherService';
 import { generateRecommendation } from '@/services/recommendationService';
+import { recordSearchTelemetry } from '@/lib/observability';
 
 export async function GET() {
   try {
@@ -34,11 +35,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  const track = (result: 'success' | 'invalid_input' | 'upstream_error') => {
+    void recordSearchTelemetry(result, Date.now() - startedAt);
+  };
   let body: unknown;
 
   try {
     body = await request.json();
   } catch {
+    track('invalid_input');
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
@@ -51,6 +57,7 @@ export async function POST(request: Request) {
       : '';
 
   if (!city) {
+    track('invalid_input');
     return NextResponse.json({ error: 'City is required' }, { status: 400 });
   }
 
@@ -86,8 +93,10 @@ export async function POST(request: Request) {
       recommendationText: created.recommendationText,
     };
 
+    track('success');
     return NextResponse.json(responsePayload, { status: 201 });
   } catch (error: unknown) {
+    track('upstream_error');
     const errorMessage =
       error instanceof Error ? error.message : 'Ошибка получения погоды';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
