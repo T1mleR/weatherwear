@@ -145,7 +145,8 @@ Resources:
           #!/bin/bash
           set -euxo pipefail
           exec > >(tee -a /var/log/weatherwear-init.log) 2>&1
-          dnf install -y git curl
+          dnf install -y git
+          # Amazon Linux 2023 already ships curl-minimal; do not install full curl.
           git clone https://github.com/T1mleR/weatherwear.git /opt/weatherwear
           cd /opt/weatherwear
           git fetch --depth=1 origin ${SourceRef}
