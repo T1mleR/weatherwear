@@ -21,7 +21,7 @@ export interface RealWeatherData {
     const { latitude, longitude, name } = geoData.results[0];
   
     // 2. Получение реальной погоды по координатам
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,uv_index`;
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,uv_index&wind_speed_unit=ms`;
     const weatherRes = await fetch(weatherUrl);
     const weatherData = await weatherRes.json();
   

@@ -1,0 +1,18 @@
+# Resource caps for a single t3.micro educational host (1 GiB RAM).
+# Applied alongside the repository's normal docker-compose.yml.
+# The database has NO published port; the app exposes port 80 through APP_PORT.
+services:
+  db:
+    mem_limit: 256m
+    cpus: 0.30
+  migrate:
+    mem_limit: 384m
+    cpus: 0.60
+  app:
+    mem_limit: 512m
+    cpus: 0.75
+    # On the AWS/Sydney EC2 host, Open-Meteo forecast fetch times out
+    # with Node's default address selection but succeeds with IPv4 preferred.
+    # Scope this to the app only; keep PostgreSQL and Render unchanged.
+    environment:
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
