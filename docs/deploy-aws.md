@@ -10,7 +10,7 @@ This is a **single-server educational demo**, not a fault-tolerant commercial de
 1. Open https://aws.amazon.com/free/ and select the **Free account plan** (not Paid / Advanced).
 2. Confirm in Billing that the plan really says Free, view remaining credits and expiry. The new Free plan normally gives an eligible new customer $100 and lasts up to six months or until credits run out.
 3. Review Free Tier and account-level spend limits in AWS Settings. Configure a strict spend limit if the interface supports it. AWS Budgets alerts are NOT hard spending caps; AWS billing data may be delayed.
-4. Set AWS Region to **Europe (Frankfurt), eu-central-1**. Confirm the actual account permits EC2 t3.micro, encrypted gp3 EBS, public IPv4, IAM/SSM, CloudFormation, and AWS Budgets. All resources can consume Free Plan credits. Never upgrade to Paid for an access error.
+4. **New AWS projects in Asia Pacific are restricted to Asia Pacific (Sydney), `ap-southeast-2`.** Stay in your assigned region. The AWS UI explicitly says Frankfurt is unavailable without advanced features; **do not activate advanced features** or upgrade to Paid. Confirm that your project permits EC2 t3.micro, encrypted gp3 EBS, public IPv4, IAM/SSM, CloudFormation, and AWS Budgets. The template uses region-local resources and a region-local Amazon Linux SSM AMI and is not tied to Frankfurt. All resources can consume Free Plan credits. If a permission/feature error blocks creation, stop and record the limitation instead of upgrading.
 5. Do not enable AWS Organizations, Control Tower, reserved capacity, advanced paid monitoring, NAT gateway or load balancer.
 
 Official references:
@@ -46,10 +46,10 @@ GitHub Actions workflow: [AWS template static checks](../.github/workflows/aws-t
 
 ## 4. Create stack only after Free plan and budget checks
 
-1. AWS Console -> Europe (Frankfurt) -> CloudFormation -> Create stack -> With new resources -> Upload template file. Use infra/aws/cloudformation.yaml.
+1. AWS Console -> **Asia Pacific (Sydney), `ap-southeast-2`** -> CloudFormation -> Create stack -> With new resources -> Upload template file. Use infra/aws/cloudformation.yaml. Never choose `Activate advanced features` to access Frankfurt.
 2. Stack name: weatherwear-coursework-free.
 3. SourceRef: preferably use a tested current commit SHA that contains this CloudFormation template and bootstrap script. A feature branch is acceptable for initial testing.
-4. BudgetAlertEmail: your own address, entered privately in AWS only.
+4. BudgetAlertEmail: your own address, entered privately in AWS only. **Creating IAM roles and AWS Budget resources may be blocked by simplified project guardrails; CloudFormation static lint cannot test AWS permissions. Do not continue through an account-upgrade warning.**
 5. EnableCloudFront: false for first HTTP demo. Enable later ONLY after reviewing free eligibility and credit usage.
 6. Review resource types/estimated credit consumption. Accept the IAM capabilities acknowledgment if requested for the EC2 SSM role. Click Submit only after reviewing that this is a Free Plan account.
 
@@ -83,3 +83,7 @@ After demonstration: CloudFormation -> select weatherwear-coursework-free -> Del
 - [ ] Test AWS URL, Next.js API, PostgreSQL persistence
 - [ ] Verify cleanup and costs
 - [ ] Add AWS-specific CI-gated redeployment, if required
+
+### 2026-11-17 region correction
+
+The account owner supplied an AWS screen explicitly stating **"Region Europe (Frankfurt) unavailable. Your project is assigned to Asia Pacific (Sydney) ap-southeast-2"**. The correct course action is to use the assigned Sydney region on the existing Free project. Do **not** select **Activate advanced features**, which changes account controls and is unnecessary for this coursework. Template syntax was statically checked, but AWS project-level authorizations and instance eligibility must still be verified in the AWS creation preview before any paid-resource provisioning.
